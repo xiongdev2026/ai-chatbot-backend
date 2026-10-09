@@ -7,14 +7,15 @@ import {
   deleteDoctor,
 } from "../controllers/doctor.controller";
 import { protect, restrictTo } from "../middleware/auth.middleware";
+import { cacheMiddleware } from "../middleware/cacheMiddleware";
 
 const router = express.Router();
 
 // GET all doctors
-router.get("/", getDoctors);
+router.get("/", cacheMiddleware(300), getDoctors);
 
 // GET doctor by ID
-router.get("/:id", getDoctorById);
+router.get("/:id", cacheMiddleware(300), getDoctorById);
 
 // CREATE
 router.post("/", protect, restrictTo("ADMIN"), createDoctor);
