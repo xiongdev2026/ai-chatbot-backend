@@ -4,7 +4,7 @@
 # `name:` pins the compose project name so the data volume is always
 # `ai-chatbot_pgvector_data` regardless of which folder you run this from —
 # this keeps existing DB data attached after moving the file here.
-version: '3.8'
+version: '3.7'
 
 services:
   db:
