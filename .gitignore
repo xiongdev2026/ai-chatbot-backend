@@ -1,0 +1,8 @@
+﻿node_modules/
+dist/
+generated/
+.env
+.env.*
+!.env.example
+error.log
+npm-debug.log*

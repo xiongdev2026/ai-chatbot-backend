@@ -1,0 +1,234 @@
+// prisma/schema.prisma
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+  output          = "../generated/prisma"
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// --- Models ---
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash")
+  fullName     String?  @map("full_name")
+  role         Role     @default(USER)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  posts           Post[]
+  services        Service[]
+  chatLogs        ChatLog[]
+  chatFeedbacks   ChatFeedback[]
+  surveyResponses SurveyResponse[]
+
+  @@map("users")
+}
+
+model Department {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  openingHours String?  @map("opening_hours") // Improvement: Consider JSON or a separate model for complex schedules if needed.
+  location     String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at") // Improvement: Added for auditing.
+
+  // Relations
+  doctors         Doctor[]
+  medicalServices MedicalService[]
+
+  @@index([isActive])
+  @@map("departments")
+}
+
+model Doctor {
+  id           String   @id @default(uuid())
+  fullName     String   @map("full_name")
+  specialty    String
+  departmentId String   @map("department_id")
+  bio          String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId, isActive])
+  @@index([specialty])
+  @@map("doctors")
+}
+
+model MedicalService {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  departmentId String   @map("department_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@index([departmentId, isActive])
+  @@map("medical_services")
+}
+
+model Service {
+  id               String   @id @default(uuid())
+  name             String
+  shortDescription String?  @map("short_description")
+  fullDescription  String?  @map("full_description")
+  category         String
+  isActive         Boolean  @default(true) @map("is_active")
+  createdBy        String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@index([category])
+  @@index([isActive])
+  @@map("services")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  title     String
+  slug      String   @unique @db.VarChar(255)
+  content   String?
+  status    String
+  createdBy String?  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  creator User? @relation(fields: [createdBy], references: [id])
+
+  @@index([status])
+  @@map("posts")
+}
+
+model KnowledgeSource {
+  id         String   @id @default(uuid())
+  sourceType String   @map("source_type")
+  sourceId   String?  @map("source_id")
+  title      String?
+  category   String
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  chunks KnowledgeChunk[]
+
+  @@index([isActive])
+  @@map("knowledge_sources")
+}
+
+model KnowledgeChunk {
+  id        String                 @id @default(uuid())
+  sourceId  String                 @map("source_id")
+  content   String
+  embedding Unsupported("vector")?
+  metadata  Json?
+  lang      String?                @default("en") @db.VarChar(10)
+  createdAt DateTime               @default(now()) @map("created_at")
+
+  source KnowledgeSource @relation(fields: [sourceId], references: [id])
+
+  @@index([sourceId])
+  @@map("knowledge_chunks")
+}
+
+model Faq {
+  id        String   @id @default(uuid())
+  question  String
+  answer    String
+  category  String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([isActive])
+  @@map("faqs")
+}
+
+model ChatLog {
+  id              String                 @id @default(uuid())
+  sessionId       String?                @map("session_id")
+  userId          String?                @map("user_id")
+  question        String
+  answer          String
+  confidenceScore Float?                 @map("confidence_score")
+  modelUsed       String?                @map("model_used")
+  // Wall-clock ms for the whole answer pipeline (retrieval + vector search +
+  // LLM generation + post-processing). Used for the dashboard speed metric.
+  responseTimeMs  Int?                   @map("response_time_ms")
+  retrievedChunks Json?                  @map("retrieved_chunks")
+  canonicalAnswer String?                @map("canonical_answer")
+  embedding       Unsupported("vector")?
+  createdAt       DateTime               @default(now()) @map("created_at")
+
+  user      User?          @relation(fields: [userId], references: [id])
+  feedbacks ChatFeedback[]
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("chat_logs")
+}
+
+model ChatFeedback {
+  id        String   @id @default(uuid())
+  chatId    String   @map("chat_id")
+  userId    String?  @map("user_id")
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User?    @relation(fields: [userId], references: [id])
+  chatlog ChatLog? @relation(fields: [chatId], references: [id])
+
+  @@map("chat_feedback")
+}
+
+model SurveyResponse {
+  id              String   @id @default(uuid())
+  sessionId       String?  @map("session_id")
+  userId          String?  @map("user_id")
+  q1Overall       Int      @map("q1_overall")
+  q2EaseOfUse     Int      @map("q2_ease_of_use")
+  q3Speed         Int      @map("q3_speed")
+  q4Accuracy      Int      @map("q4_accuracy")
+  q5Understanding Int      @map("q5_understanding")
+  q6Clarity       Int      @map("q6_clarity")
+  q7Helpfulness   Int      @map("q7_helpfulness")
+  q8Utility       Int      @map("q8_utility")
+  q9ReuseIntent   Int      @map("q9_reuse_intent")
+  q10Nps          Int      @map("q10_nps")
+  likedMost       String?  @map("liked_most")
+  improvement     String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("survey_responses")
+}
+
